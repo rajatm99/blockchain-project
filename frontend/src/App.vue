@@ -14,10 +14,12 @@ export default {
       balance: null,
       transferAddress: '',
       transferAmount: 0,
+      contract: null,
+      balanceLoading: false,
     };
   },
   mounted() {
-    this.onPageLoad(); 
+    this.onPageLoad();
   },
   methods: {
     async onPageLoad() {
@@ -389,32 +391,34 @@ export default {
 
       this.account = accounts[0]
 
-    },
-    async getBalance() {
-      try {
-
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        await provider.send("eth_requestAccounts", []);
-        const signer = await provider.getSigner();
-
-        const contract = new ethers.Contract(this.address, this.abi, signer);
-
-        this.balance = await contract.balanceOf(this.account)
-
-
-      } catch (e) {
-        console.log("error", e)
-      }
-
-    },
-    async transfer() {
       const provider = new ethers.BrowserProvider(window.ethereum);
       await provider.send("eth_requestAccounts", []);
       const signer = await provider.getSigner();
 
-      const contract = new ethers.Contract(this.address, this.abi, signer);
+      this.contract = new ethers.Contract(this.address, this.abi, signer);
 
-      await contract.transfer(this.transferAddress, this.transferAmount)
+      this.walletConnected = true
+
+    },
+    async getBalance() {
+      this.balanceLoading = true;
+      try {
+        this.balance = await this.contract.balanceOf(this.account)
+      } catch (e) {
+        console.log("error", e)
+      } finally {
+        this.balanceLoading = false;
+      }
+    },
+    async transfer() {
+
+      try {
+        const tx = await this.contract.transfer(this.transferAddress, this.transferAmount)
+        tx.wait()
+
+      } catch (e) {
+        console.log("error - ", e)
+      }
     },
 
   }
@@ -422,117 +426,110 @@ export default {
 </script>
 
 <template>
-  <div>
+  <div class="dark-theme">
     <header class="header">
       <h1>{{ projectName }}</h1>
-      <button v-if="account == null" @click="connectWallet">Connect Wallet</button>
+      <button v-if="!this.walletConnected" @click="connectWallet" class="connect-button">Connect Wallet</button>
       <div v-else>
-        Connected to : {{ this.account }}
+        Connected : {{ this.account }}
       </div>
     </header>
+    <main class="main-content">
+      <div class="balance">
+        <h2 v-if="!balanceLoading">Balance : {{ balance }} RTN</h2>
+        <h2 v-else> Loading Balance ... </h2>
 
-    <div class="balance-container">
-      <h2>Balance: {{ this.balance }}</h2>
-      <button class="refresh-button" @click="getBalance">Refresh Balance</button>
-      <div class="transfer-container">
-        <input type="text" v-model="transferAddress" placeholder="Recipient Address" class="transfer-input" />
-        <input type="number" v-model="transferAmount" placeholder="Amount" class="transfer-input" />
-        <button class="transfer-button" @click="transfer">Transfer Tokens</button>
+        <div class="refresh-button" @click="getBalance">
+          <img src="@/assets/refresh-svgrepo-com.svg" alt="Description of SVG" />
+        </div>
       </div>
-    </div>
-
+      <div class="transfer-form">
+        <h2>Transfer Tokens</h2>
+        <input v-model="transferAddress" type="text" placeholder="Recipient Address" />
+        <input v-model="transferAmount" type="number" placeholder="Amount" />
+        <button @click="transfer" class="transfer-button">Transfer</button>
+      </div>
+    </main>
   </div>
 </template>
 
-<style>
-body {
-  margin: 0;
-  background-color: #000;
-  color: #fff;
-  padding-top: 60px;
+<style scoped>
+.dark-theme {
+  background-color: #121212;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .header {
+  width: 100%;
+  padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  width: 100%;
-  padding: 10px;
-  background-color: #000;
-  border-bottom: 2px solid #007bff;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 1000;
+  background-color: #1e1e1e;
 }
 
-.header h1 {
-  margin: 0;
-  color: #007bff;
-}
-
-.header button {
-  padding: 8px 16px;
+.connect-button {
   background-color: #007bff;
   color: white;
   border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.header button:hover {
-  background-color: #0056b3;
-}
-
-.balance-container {
-  margin-top: 20px;
-  padding: 20px;
-  background-color: #1a1a1a;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  text-align: center;
-}
-
-.refresh-button {
   padding: 10px 20px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  margin: 10px 0;
 }
 
-.refresh-button:hover {
-  background-color: #218838;
+.main-content {
+  padding: 20px;
+  width: 100%;
+  max-width: 600px;
+  background-color: #1e1e1e;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  margin-top: 20px;
 }
 
-.transfer-container {
+.balance {
+  margin-bottom: 20px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  margin-top: 10px;
 }
 
-.transfer-input {
+.transfer-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.transfer-form input {
+  margin-bottom: 10px;
   padding: 10px;
-  margin: 0 5px;
-  border: 1px solid #007bff;
-  border-radius: 4px;
-  width: 150px;
+  border: none;
+  border-radius: 5px;
 }
 
 .transfer-button {
-  padding: 10px 20px;
-  background-color: #007bff;
+  background-color: #28a745;
   color: white;
   border: none;
-  border-radius: 4px;
+  padding: 10px;
+  border-radius: 5px;
   cursor: pointer;
-  margin-left: 5px;
 }
 
-.transfer-button:hover {
-  background-color: #0056b3;
+.refresh-button {
+  height: 20px;
+  width: 20px;
+  margin-left: 20px;
+  cursor: pointer;
 }
+
+.refresh-button img {
+  height: 100%;
+  width: 100%;
+}
+
 </style>
